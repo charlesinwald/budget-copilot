@@ -342,6 +342,14 @@ describe('PlaidIntegration', () => {
         { item_id: 'item_abc', access_token: 'token', cursor: 'cursor_123' },
       ]);
 
+      vi.spyOn(service as any, 'syncTransactionsWithCursor').mockResolvedValue({
+        added: [{ transactionId: 'txn_1', amount: 10 }],
+        modified: [],
+        removed: [],
+        nextCursor: 'cursor_new',
+        hasMore: false,
+      });
+
       const result = await service.syncTransactions({
         userId: 'user_123',
         itemId: 'item_abc',
