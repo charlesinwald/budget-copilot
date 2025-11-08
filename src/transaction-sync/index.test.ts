@@ -26,6 +26,9 @@ describe('TransactionSync Observer', () => {
       TRANSACTION_PROCESSING_QUEUE: {
         send: vi.fn(),
       },
+      TRANSACTION_SYNC_QUEUE: {
+        send: vi.fn(),
+      },
     } as unknown as Env;
 
     observer = new TransactionSync(mockEnv, {});

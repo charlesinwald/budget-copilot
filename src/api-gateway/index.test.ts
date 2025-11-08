@@ -462,7 +462,7 @@ describe('ApiGateway', () => {
     });
 
     test('should handle service errors gracefully', async () => {
-      vi.mocked(mockEnv.PLAID_INTEGRATION.getAccounts).mockRejectedValue(
+      vi.mocked(mockEnv.PLAID_INTEGRATION.getAccounts).mockRejectedValueOnce(
         new Error('Service unavailable')
       );
 

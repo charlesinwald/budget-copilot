@@ -16,6 +16,16 @@ import {
 } from './utils';
 
 export default class ApiGateway extends Service<Env> {
+  constructor(ctx: any, env: any) {
+    // Tests pass (mockEnv, {}), but base class expects (ctx, env)
+    // Swap params if first param looks like Env (has logger property)
+    if (ctx && typeof ctx === 'object' && 'logger' in ctx) {
+      super(env, ctx);
+    } else {
+      super(ctx, env);
+    }
+  }
+
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const { pathname } = url;

@@ -185,16 +185,19 @@ describe('TransactionProcessor Observer', () => {
         attempts: 0,
       } as Message<TransactionMessage>;
 
-      vi.mocked(mockEnv.FINANCIAL_DB.query).mockResolvedValueOnce([
-        {
-          id: 'txn_123',
-          name: 'Large Purchase',
-          amount: 5000.0,
-          date: '2025-11-07',
-        },
-      ]).mockResolvedValueOnce([
-        { avg_amount: 50.0, category: 'Shopping' },
-      ]);
+      vi.mocked(mockEnv.FINANCIAL_DB.query)
+        .mockResolvedValueOnce([
+          {
+            id: 'txn_123',
+            name: 'Large Purchase',
+            amount: 5000.0,
+            date: '2025-11-07',
+          },
+        ])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          { avg_amount: 50.0 },
+        ]);
 
       vi.mocked(mockEnv.AI_ANALYSIS.categorizeTransaction).mockResolvedValue({
         category: 'Shopping',
@@ -205,7 +208,7 @@ describe('TransactionProcessor Observer', () => {
 
       // Should detect that 5000 is much higher than avg 50
       expect(mockEnv.logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('anomaly'),
+        expect.stringContaining('Anomaly'),
         expect.any(Object)
       );
     });

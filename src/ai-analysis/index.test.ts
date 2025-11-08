@@ -26,6 +26,8 @@ describe('AiAnalysis', () => {
 
   describe('categorizeTransaction', () => {
     test('should categorize transaction with high confidence', async () => {
+      vi.spyOn(service as any, 'callClaudeAPI').mockResolvedValue('Food and Drink');
+
       const result = await service.categorizeTransaction({
         transactionName: 'STARBUCKS',
         merchantName: 'Starbucks',
@@ -40,6 +42,8 @@ describe('AiAnalysis', () => {
     });
 
     test('should handle missing merchant name', async () => {
+      vi.spyOn(service as any, 'callClaudeAPI').mockResolvedValue('Other');
+
       const result = await service.categorizeTransaction({
         transactionName: 'Payment',
         amount: 50.0,
@@ -173,9 +177,15 @@ describe('AiAnalysis', () => {
 
   describe('chatWithFinancialData', () => {
     test('should respond to spending questions', async () => {
-      vi.mocked(mockEnv.FINANCIAL_DB.query).mockResolvedValue([
-        { category: 'Food and Drink', total: 342.5, count: 23 },
-      ]);
+      vi.mocked(mockEnv.FINANCIAL_DB.query)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ total: 342.5 }])
+        .mockResolvedValueOnce([]);
+
+      vi.spyOn(service as any, 'callClaudeAPI').mockResolvedValue(
+        'You spent $342.50 on Food and Drink last month.'
+      );
 
       const result = await service.chatWithFinancialData({
         userId: 'user_123',
@@ -191,6 +201,8 @@ describe('AiAnalysis', () => {
     test('should include transaction references', async () => {
       vi.mocked(mockEnv.FINANCIAL_DB.query)
         .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ total: 100 }])
         .mockResolvedValueOnce([
           {
             transaction_id: 'txn_123',
@@ -199,6 +211,10 @@ describe('AiAnalysis', () => {
             date: '2025-11-07',
           },
         ]);
+
+      vi.spyOn(service as any, 'callClaudeAPI').mockResolvedValue(
+        'Here are your coffee purchases from Starbucks.'
+      );
 
       const result = await service.chatWithFinancialData({
         userId: 'user_123',
@@ -209,6 +225,16 @@ describe('AiAnalysis', () => {
     });
 
     test('should save chat history', async () => {
+      vi.mocked(mockEnv.FINANCIAL_DB.query)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ total: 500 }])
+        .mockResolvedValueOnce([]);
+
+      vi.spyOn(service as any, 'callClaudeAPI').mockResolvedValue(
+        'Your current balance is $500.'
+      );
+
       await service.chatWithFinancialData({
         userId: 'user_123',
         message: 'What is my balance?',
@@ -221,10 +247,18 @@ describe('AiAnalysis', () => {
     });
 
     test('should use previous chat context', async () => {
-      vi.mocked(mockEnv.FINANCIAL_DB.query).mockResolvedValueOnce([
-        { role: 'user', content: 'Show my spending', created_at: '2025-11-07' },
-        { role: 'assistant', content: 'Here is your spending', created_at: '2025-11-07' },
-      ]);
+      vi.mocked(mockEnv.FINANCIAL_DB.query)
+        .mockResolvedValueOnce([
+          { role: 'user', content: 'Show my spending', created_at: '2025-11-07' },
+          { role: 'assistant', content: 'Here is your spending', created_at: '2025-11-07' },
+        ])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ total: 300 }])
+        .mockResolvedValueOnce([]);
+
+      vi.spyOn(service as any, 'callClaudeAPI').mockResolvedValue(
+        'Last month you spent $300.'
+      );
 
       const result = await service.chatWithFinancialData({
         userId: 'user_123',
