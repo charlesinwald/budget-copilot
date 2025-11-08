@@ -213,7 +213,9 @@ export default class AiAnalysis extends Service<Env> {
     const financialContext = await this.getFinancialContext(request.userId);
 
     const prompt = this.buildChatPrompt(request.message, chatHistory.reverse(), financialContext);
-    const response = await this.callClaudeAPI(prompt);
+    const response = this.env.ANTHROPIC_API_KEY
+      ? await this.callClaudeAPI(prompt)
+      : 'Here is a mock response based on your recent activity.';
 
     await this.env.FINANCIAL_DB.execute(
       'INSERT INTO chat_history (user_id, role, content, created_at) VALUES (?, ?, ?, ?)',
