@@ -1,5 +1,5 @@
 import { Service } from '@liquidmetal-ai/raindrop-framework';
-import { Env } from './raindrop.gen';
+import { Env } from './raindrop.gen.js';
 import {
   handleCreateLinkToken,
   handleExchangeToken,
@@ -13,7 +13,7 @@ import {
   handleCategories,
   jsonResponse,
   errorResponse,
-} from './utils';
+} from './utils.js';
 
 export default class ApiGateway extends Service<Env> {
   constructor(ctx: any, env: any) {

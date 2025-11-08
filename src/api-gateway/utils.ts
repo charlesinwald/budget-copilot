@@ -1,4 +1,4 @@
-import { Env } from './raindrop.gen';
+import { Env } from './raindrop.gen.js';
 import {
   LinkTokenResponse,
   ExchangeTokenResponse,
@@ -11,7 +11,7 @@ import {
   DashboardResponse,
   CategoriesResponse,
   ErrorResponse,
-} from './interfaces';
+} from './interfaces.js';
 
 // Authentication helpers
 export async function authenticateUser(
@@ -340,7 +340,18 @@ export async function handleDashboard(
     const dashboard: DashboardResponse = {
       totalBalance: calculateTotalBalance(accounts),
       accountsCount: accounts.length,
-      recentTransactions: transactions.transactions.slice(0, 10),
+    recentTransactions: transactions.transactions.slice(0, 10).map(t => ({
+      id: t.transactionId,
+      accountId: t.accountId,
+      amount: t.amount,
+      date: t.date,
+      name: t.name,
+      merchantName: t.merchantName,
+      category: t.category ? t.category.join(', ') : undefined,
+      pending: t.pending,
+      transactionType: t.transactionType,
+      paymentChannel: t.paymentChannel,
+    })),
       monthlySpending: {
         current: spendingAnalysis.totalSpending,
         previous: 0,

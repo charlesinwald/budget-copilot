@@ -1,5 +1,5 @@
 import { Service } from '@liquidmetal-ai/raindrop-framework';
-import { Env } from './raindrop.gen';
+import { Env } from './raindrop.gen.js';
 import {
   LinkTokenResponse,
   ExchangeTokenRequest,
@@ -12,7 +12,7 @@ import {
   PlaidConfig,
   PlaidAccount,
   PlaidTransaction,
-} from './interfaces';
+} from './interfaces.js';
 
 export default class PlaidIntegration extends Service<Env> {
   constructor(ctx: any, env: any) {
@@ -141,7 +141,6 @@ export default class PlaidIntegration extends Service<Env> {
     item: { institution_name?: string }
   ): AccountBalance {
     return {
-      id: account.accountId,
       accountId: account.accountId,
       name: account.name,
       officialName: account.name,

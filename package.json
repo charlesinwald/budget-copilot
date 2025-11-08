@@ -3,14 +3,23 @@
   "version": "1.0.0",
   "private": true,
   "description": "LiquidMetal AI app",
+  "type": "module",
   "scripts": {
-    "build": "shx rm -rf dist && tsc -b",
+    "build": "shx rm -rf dist && tsc",
+    "build:nocheck": "shx rm -rf dist && tsc --skipLibCheck",
+    "dev": "npm run build:nocheck && node -r dotenv/config dist/dev-server.js",
+    "dev:watch": "tsc --skipLibCheck --watch & sleep 3 && node -r dotenv/config dist/dev-server.js",
+    "start": "node -r dotenv/config dist/dev-server.js",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "lint": "eslint . --max-warnings=0",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "db:setup": "node scripts/setup-db.js",
+    "raindrop:dev": "raindrop build start --local",
+    "raindrop:deploy": "raindrop build deploy"
   },
   "devDependencies": {
+    "@types/node": "^20.11.0",
     "shx": "^0.4.0",
     "ts-node": "^10",
     "typescript-eslint": "^8.7.0",
@@ -20,6 +29,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1",
     "@liquidmetal-ai/raindrop-framework": "^0.9.2",
+    "dotenv": "^16.4.5",
     "zod": "^3"
   }
 }

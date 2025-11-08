@@ -1,0 +1,40 @@
+name = "budget-copilot-api-gateway"
+main = "dist/api-gateway/index.js"
+compatibility_date = "2024-01-01"
+
+# Local development settings
+[dev]
+port = 8787
+ip = "0.0.0.0"
+
+# Environment variables (loaded from .env file in development)
+# For production, set these in Cloudflare dashboard or using wrangler secrets
+
+# D1 Database (SQLite for local dev)
+[[d1_databases]]
+binding = "FINANCIAL_DB"
+database_name = "financial-db"
+database_id = "local-financial-db"
+
+# KV Namespace for sessions
+[[kv_namespaces]]
+binding = "SESSION_CACHE"
+id = "local-session-cache"
+
+# Queue bindings
+[[queues.producers]]
+binding = "TRANSACTION_SYNC_QUEUE"
+queue = "transaction-sync-queue"
+
+[[queues.producers]]
+binding = "TRANSACTION_PROCESSING_QUEUE"
+queue = "transaction-processing-queue"
+
+# Service bindings (for calling other services)
+[[services]]
+binding = "PLAID_INTEGRATION"
+service = "plaid-integration"
+
+[[services]]
+binding = "AI_ANALYSIS"
+service = "ai-analysis"

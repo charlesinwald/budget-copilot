@@ -1,4 +1,4 @@
-import { Env } from './raindrop.gen';
+import { Env } from './raindrop.gen.js';
 import {
   PlaidConfig,
   LinkTokenResponse,
@@ -8,7 +8,7 @@ import {
   SyncTransactionsResponse,
   PlaidError,
   StoredPlaidItem,
-} from './interfaces';
+} from './interfaces.js';
 
 // Configuration
 export function getPlaidConfig(env: Env): PlaidConfig {

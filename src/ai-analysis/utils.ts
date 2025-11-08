@@ -1,11 +1,11 @@
-import { Env } from './raindrop.gen';
+import { Env } from './raindrop.gen.js';
 import {
   ClaudeConfig,
   CategorizationResponse,
   MerchantAnalysisResponse,
   SpendingPattern,
   Prediction,
-} from './interfaces';
+} from './interfaces.js';
 
 // Configuration
 export function getClaudeConfig(env: Env): ClaudeConfig {

@@ -1,5 +1,5 @@
-import { Env } from './raindrop.gen';
-import { EnrichedTransaction, SpendingPatternUpdate } from './interfaces';
+import { Env } from './raindrop.gen.js';
+import { EnrichedTransaction, SpendingPatternUpdate } from './interfaces.js';
 
 // Transaction enrichment
 export async function enrichTransaction(

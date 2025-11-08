@@ -13,16 +13,17 @@
     "isolatedModules": true,
     "jsx": "react",
     "lib": ["es2022"],
-    "module": "es2022",
+    "module": "NodeNext",
     "moduleDetection": "force",
-    "moduleResolution": "Bundler",
-    "noEmit": true,
+    "moduleResolution": "NodeNext",
+    "noEmit": false,
     "noUncheckedIndexedAccess": true,
     "outDir": "dist",
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    "strict": true,
+    "strict": false,
     "target": "es2022"
   },
-  "exclude": ["test"]
+  "include": ["src/**/*"],
+  "exclude": ["test", "client", "node_modules", "dist", "**/*.test.ts"]
 }

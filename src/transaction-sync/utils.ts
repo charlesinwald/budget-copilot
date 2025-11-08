@@ -1,5 +1,5 @@
-import { Env } from './raindrop.gen';
-import { TransactionRecord, SyncResult } from './interfaces';
+import { Env } from './raindrop.gen.js';
+import { TransactionRecord, SyncResult } from './interfaces.js';
 
 // Batch processing
 export async function processSyncBatch(

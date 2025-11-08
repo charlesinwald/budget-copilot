@@ -1,6 +1,8 @@
 import { Each, Message } from '@liquidmetal-ai/raindrop-framework';
-import { Env } from './raindrop.gen';
-import { SyncJobMessage } from './interfaces';
+import { Env } from './raindrop.gen.js';
+import { SyncJobMessage } from './interfaces.js';
+
+export type Body = SyncJobMessage;
 
 export default class TransactionSync extends Each<SyncJobMessage, Env> {
   constructor(ctx: any, env: any) {

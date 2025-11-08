@@ -1,5 +1,5 @@
 import { Service } from '@liquidmetal-ai/raindrop-framework';
-import { Env } from './raindrop.gen';
+import { Env } from './raindrop.gen.js';
 import {
   CategorizationRequest,
   CategorizationResponse,
@@ -12,7 +12,7 @@ import {
   ChatRequest,
   ChatResponse,
   Prediction,
-} from './interfaces';
+} from './interfaces.js';
 
 export default class AiAnalysis extends Service<Env> {
   constructor(ctx: any, env: any) {
@@ -258,8 +258,8 @@ export default class AiAnalysis extends Service<Env> {
       throw new Error(`Claude API error: ${JSON.stringify(error)}`);
     }
 
-    const result = await response.json();
-    return result.content[0].text;
+    const result = await response.json() as { content?: Array<{ text?: string }> };
+    return (result.content && result.content[0] && result.content[0].text) || '';
   }
 
   private buildCategorizationPrompt(request: CategorizationRequest): string {

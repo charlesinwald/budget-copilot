@@ -1,6 +1,8 @@
 import { Each, Message } from '@liquidmetal-ai/raindrop-framework';
-import { Env } from './raindrop.gen';
-import { TransactionMessage } from './interfaces';
+import { Env } from './raindrop.gen.js';
+import { TransactionMessage } from './interfaces.js';
+
+export type Body = TransactionMessage;
 
 export default class TransactionProcessor extends Each<TransactionMessage, Env> {
   constructor(ctx: any, env: any) {
