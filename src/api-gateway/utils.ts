@@ -1,0 +1,381 @@
+import { Env } from './raindrop.gen';
+import {
+  LinkTokenResponse,
+  ExchangeTokenResponse,
+  AccountsResponse,
+  TransactionsResponse,
+  SyncResponse,
+  ChatResponse,
+  SpendingAnalysisResponse,
+  PredictionsResponse,
+  DashboardResponse,
+  CategoriesResponse,
+  ErrorResponse,
+} from './interfaces';
+
+// Authentication helpers
+export async function authenticateUser(
+  request: Request,
+  env: Env
+): Promise<string | null> {
+  const cookieHeader = request.headers.get('Cookie');
+  if (!cookieHeader) {
+    return null;
+  }
+
+  const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
+    const [key, value] = cookie.trim().split('=');
+    acc[key] = value;
+    return acc;
+  }, {} as Record<string, string>);
+
+  const sessionId = cookies['session'];
+  if (!sessionId) {
+    return null;
+  }
+
+  const userId = await env.SESSION_CACHE.get(`session:${sessionId}`);
+  return userId as string | null;
+}
+
+export async function validateSession(
+  sessionId: string,
+  env: Env
+): Promise<boolean> {
+  const userId = await env.SESSION_CACHE.get(`session:${sessionId}`);
+  return userId !== null;
+}
+
+// Response formatting
+export function jsonResponse<T>(data: T, status: number = 200): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  });
+}
+
+export function errorResponse(
+  message: string,
+  status: number = 500,
+  details?: string
+): Response {
+  const errorBody: ErrorResponse = {
+    error: message,
+    ...(details && { details }),
+  };
+  return jsonResponse(errorBody, status);
+}
+
+// Request parsing
+export async function parseJsonBody<T>(request: Request): Promise<T> {
+  const text = await request.text();
+  if (!text) {
+    throw new Error('Request body is empty');
+  }
+  return JSON.parse(text) as T;
+}
+
+export function getQueryParam(url: URL, param: string): string | null {
+  return url.searchParams.get(param);
+}
+
+export function getRequiredQueryParam(url: URL, param: string): string {
+  const value = url.searchParams.get(param);
+  if (!value) {
+    throw new Error(`Required query parameter '${param}' is missing`);
+  }
+  return value;
+}
+
+// Route handlers
+export async function handleCreateLinkToken(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  try {
+    const body = await parseJsonBody<{ userId: string }>(request);
+
+    if (!body.userId || body.userId.trim() === '') {
+      return errorResponse('userId is required', 400);
+    }
+
+    const result = await env.PLAID_INTEGRATION.createLinkToken(body.userId);
+    return jsonResponse(result);
+  } catch (error) {
+    env.logger.error('Failed to create link token', { error });
+    return errorResponse('Failed to create link token', 500);
+  }
+}
+
+export async function handleExchangeToken(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  try {
+    const body = await parseJsonBody<{
+      publicToken: string;
+      userId: string;
+      institutionId: string;
+      institutionName: string;
+    }>(request);
+
+    if (!body.publicToken || !body.userId || !body.institutionId || !body.institutionName) {
+      return errorResponse('Missing required fields', 400);
+    }
+
+    const result = await env.PLAID_INTEGRATION.exchangeToken(body);
+    return jsonResponse({
+      success: true,
+      itemId: result.itemId,
+      accounts: result.accounts,
+    });
+  } catch (error) {
+    env.logger.error('Failed to exchange token', { error });
+    return errorResponse('Failed to exchange token', 500);
+  }
+}
+
+export async function handleGetAccounts(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  try {
+    const url = new URL(request.url);
+    const userId = getQueryParam(url, 'userId');
+
+    if (!userId) {
+      return errorResponse('userId query parameter is required', 400);
+    }
+
+    const isValid = await validateSession(userId, env);
+    if (!isValid) {
+      return errorResponse('Invalid session', 401);
+    }
+
+    const accounts = await env.PLAID_INTEGRATION.getAccounts(userId);
+    return jsonResponse({ accounts });
+  } catch (error) {
+    env.logger.error('Failed to get accounts', { error });
+    return errorResponse('Failed to get accounts', 500);
+  }
+}
+
+export async function handleGetTransactions(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  try {
+    const url = new URL(request.url);
+    const userId = getQueryParam(url, 'userId');
+    const accountId = getQueryParam(url, 'accountId');
+    const startDate = getQueryParam(url, 'startDate');
+    const endDate = getQueryParam(url, 'endDate');
+
+    if (!userId) {
+      return errorResponse('userId query parameter is required', 400);
+    }
+
+    if (startDate && !isValidDate(startDate)) {
+      return errorResponse('Invalid startDate format', 400);
+    }
+
+    if (endDate && !isValidDate(endDate)) {
+      return errorResponse('Invalid endDate format', 400);
+    }
+
+    const result = await env.PLAID_INTEGRATION.getTransactions({
+      userId,
+      accountId: accountId ?? undefined,
+      startDate: startDate ?? undefined,
+      endDate: endDate ?? undefined,
+    });
+
+    return jsonResponse(result);
+  } catch (error) {
+    env.logger.error('Failed to get transactions', { error });
+    return errorResponse('Failed to get transactions', 500);
+  }
+}
+
+export async function handleSyncTransactions(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  try {
+    const body = await parseJsonBody<{ userId: string; itemId: string }>(request);
+
+    if (!body.userId || !body.itemId) {
+      return errorResponse('userId and itemId are required', 400);
+    }
+
+    await env.TRANSACTION_SYNC_QUEUE.send({
+      userId: body.userId,
+      itemId: body.itemId,
+    });
+
+    return jsonResponse({ success: true });
+  } catch (error) {
+    env.logger.error('Failed to enqueue sync job', { error });
+    return errorResponse('Failed to enqueue sync job', 500);
+  }
+}
+
+export async function handleChat(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  try {
+    const body = await parseJsonBody<{ userId: string; message: string }>(request);
+
+    if (!body.userId || !body.message) {
+      return errorResponse('userId and message are required', 400);
+    }
+
+    if (body.message.trim() === '') {
+      return errorResponse('message cannot be empty', 400);
+    }
+
+    if (body.message.length > 2000) {
+      return errorResponse('message exceeds maximum length', 400);
+    }
+
+    const result = await env.AI_ANALYSIS.chatWithFinancialData({
+      userId: body.userId,
+      message: body.message,
+    });
+
+    return jsonResponse(result);
+  } catch (error) {
+    env.logger.error('Failed to process chat message', { error });
+    return errorResponse('Failed to process chat message', 500);
+  }
+}
+
+export async function handleSpendingAnalysis(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  try {
+    const url = new URL(request.url);
+    const userId = getQueryParam(url, 'userId');
+    const period = getQueryParam(url, 'period') || 'monthly';
+    const month = getQueryParam(url, 'month');
+
+    if (!userId) {
+      return errorResponse('userId query parameter is required', 400);
+    }
+
+    const result = await env.AI_ANALYSIS.analyzeSpending({
+      userId,
+      period: period as 'daily' | 'weekly' | 'monthly',
+      month: month ?? undefined,
+    });
+
+    return jsonResponse(result);
+  } catch (error) {
+    env.logger.error('Failed to analyze spending', { error });
+    return errorResponse('Failed to analyze spending', 500);
+  }
+}
+
+export async function handlePredictions(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  try {
+    const url = new URL(request.url);
+    const userId = getQueryParam(url, 'userId');
+
+    if (!userId) {
+      return errorResponse('userId query parameter is required', 400);
+    }
+
+    const result = await env.AI_ANALYSIS.generatePredictions({ userId });
+    return jsonResponse(result);
+  } catch (error) {
+    env.logger.error('Failed to generate predictions', { error });
+    return errorResponse('Failed to generate predictions', 500);
+  }
+}
+
+export async function handleDashboard(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  try {
+    const url = new URL(request.url);
+    const userId = getQueryParam(url, 'userId');
+
+    if (!userId) {
+      return errorResponse('userId query parameter is required', 400);
+    }
+
+    const accounts = await env.PLAID_INTEGRATION.getAccounts(userId);
+    const totalBalance = accounts.reduce((sum, acc) => sum + acc.currentBalance, 0);
+
+    const transactions = await env.PLAID_INTEGRATION.getTransactions({
+      userId,
+      count: 10,
+    });
+
+    const spendingAnalysis = await env.AI_ANALYSIS.analyzeSpending({
+      userId,
+      period: 'monthly',
+    });
+
+    const dashboard: DashboardResponse = {
+      totalBalance,
+      accountsCount: accounts.length,
+      recentTransactions: transactions.transactions.slice(0, 10),
+      monthlySpending: {
+        current: spendingAnalysis.totalSpending,
+        previous: 0,
+        percentageChange: 0,
+      },
+      topCategories: spendingAnalysis.byCategory.slice(0, 5),
+      alerts: [],
+    };
+
+    return jsonResponse(dashboard);
+  } catch (error) {
+    env.logger.error('Failed to get dashboard data', { error });
+    return errorResponse('Failed to get dashboard data', 500);
+  }
+}
+
+export async function handleCategories(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  const categories = [
+    'Food and Drink',
+    'Shopping',
+    'Transportation',
+    'Entertainment',
+    'Bills and Utilities',
+    'Healthcare',
+    'Travel',
+    'Personal Care',
+    'Education',
+    'Investments',
+    'Income',
+    'Transfer',
+    'Other',
+  ];
+
+  return jsonResponse({ categories });
+}
+
+function isValidDate(dateString: string): boolean {
+  const regex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!regex.test(dateString)) {
+    return false;
+  }
+  const date = new Date(dateString);
+  return !isNaN(date.getTime());
+}

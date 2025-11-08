@@ -1,0 +1,63 @@
+application "budget-copilot" {
+
+  env "PLAID_CLIENT_ID" {
+    secret = true
+  }
+
+  env "PLAID_SECRET" {
+    secret = true
+  }
+
+  env "PLAID_ENVIRONMENT" {
+    secret = false
+  }
+
+  env "ANTHROPIC_API_KEY" {
+    secret = true
+  }
+
+  env "SESSION_SECRET" {
+    secret = true
+  }
+
+  env "FRONTEND_URL" {
+    secret = false
+  }
+
+  service "api-gateway" {
+    visibility = "public"
+  }
+
+  service "plaid-integration" {
+    visibility = "private"
+  }
+
+  service "ai-analysis" {
+    visibility = "private"
+  }
+
+  queue "transaction-sync-queue" {
+  }
+
+  observer "transaction-sync" {
+    source {
+      queue = "transaction-sync-queue"
+    }
+  }
+
+  observer "transaction-processor" {
+    source {
+      queue = "transaction-processing-queue"
+    }
+  }
+
+  queue "transaction-processing-queue" {
+  }
+
+  smartsql "financial-db" {
+  }
+
+  kv_cache "session-cache" {
+  }
+
+}
