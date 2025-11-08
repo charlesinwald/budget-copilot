@@ -15,7 +15,7 @@ import {
   errorResponse,
 } from './utils';
 
-export default class extends Service<Env> {
+export default class ApiGateway extends Service<Env> {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const { pathname } = url;
@@ -79,7 +79,9 @@ export default class extends Service<Env> {
 
       return errorResponse('Not found', 404);
     } catch (error) {
-      this.env.logger.error('Unhandled error in API gateway', { error, pathname, method });
+      if (this.env && this.env.logger) {
+        this.env.logger.error('Unhandled error in API gateway', { error, pathname, method });
+      }
       return errorResponse('Internal server error', 500);
     }
   }

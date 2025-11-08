@@ -23,19 +23,25 @@ export async function authenticateUser(
     return null;
   }
 
-  const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
-    const [key, value] = cookie.trim().split('=');
-    acc[key] = value;
-    return acc;
-  }, {} as Record<string, string>);
-
+  const cookies = parseCookies(cookieHeader);
   const sessionId = cookies['session'];
+
   if (!sessionId) {
     return null;
   }
 
   const userId = await env.SESSION_CACHE.get(`session:${sessionId}`);
   return userId as string | null;
+}
+
+function parseCookies(cookieHeader: string): Record<string, string> {
+  return cookieHeader.split(';').reduce((acc, cookie) => {
+    const [key, value] = cookie.trim().split('=');
+    if (key && value) {
+      acc[key] = value;
+    }
+    return acc;
+  }, {} as Record<string, string>);
 }
 
 export async function validateSession(
@@ -172,20 +178,18 @@ export async function handleGetTransactions(
   try {
     const url = new URL(request.url);
     const userId = getQueryParam(url, 'userId');
-    const accountId = getQueryParam(url, 'accountId');
-    const startDate = getQueryParam(url, 'startDate');
-    const endDate = getQueryParam(url, 'endDate');
 
     if (!userId) {
       return errorResponse('userId query parameter is required', 400);
     }
 
-    if (startDate && !isValidDate(startDate)) {
-      return errorResponse('Invalid startDate format', 400);
-    }
+    const accountId = getQueryParam(url, 'accountId');
+    const startDate = getQueryParam(url, 'startDate');
+    const endDate = getQueryParam(url, 'endDate');
 
-    if (endDate && !isValidDate(endDate)) {
-      return errorResponse('Invalid endDate format', 400);
+    const dateValidationError = validateDateRange(startDate, endDate);
+    if (dateValidationError) {
+      return dateValidationError;
     }
 
     const result = await env.PLAID_INTEGRATION.getTransactions({
@@ -200,6 +204,18 @@ export async function handleGetTransactions(
     env.logger.error('Failed to get transactions', { error });
     return errorResponse('Failed to get transactions', 500);
   }
+}
+
+function validateDateRange(startDate: string | null, endDate: string | null): Response | null {
+  if (startDate && !isValidDate(startDate)) {
+    return errorResponse('Invalid startDate format', 400);
+  }
+
+  if (endDate && !isValidDate(endDate)) {
+    return errorResponse('Invalid endDate format', 400);
+  }
+
+  return null;
 }
 
 export async function handleSyncTransactions(
@@ -315,21 +331,14 @@ export async function handleDashboard(
       return errorResponse('userId query parameter is required', 400);
     }
 
-    const accounts = await env.PLAID_INTEGRATION.getAccounts(userId);
-    const totalBalance = accounts.reduce((sum, acc) => sum + acc.currentBalance, 0);
-
-    const transactions = await env.PLAID_INTEGRATION.getTransactions({
-      userId,
-      count: 10,
-    });
-
-    const spendingAnalysis = await env.AI_ANALYSIS.analyzeSpending({
-      userId,
-      period: 'monthly',
-    });
+    const [accounts, transactions, spendingAnalysis] = await Promise.all([
+      env.PLAID_INTEGRATION.getAccounts(userId),
+      env.PLAID_INTEGRATION.getTransactions({ userId, count: 10 }),
+      env.AI_ANALYSIS.analyzeSpending({ userId, period: 'monthly' }),
+    ]);
 
     const dashboard: DashboardResponse = {
-      totalBalance,
+      totalBalance: calculateTotalBalance(accounts),
       accountsCount: accounts.length,
       recentTransactions: transactions.transactions.slice(0, 10),
       monthlySpending: {
@@ -346,6 +355,10 @@ export async function handleDashboard(
     env.logger.error('Failed to get dashboard data', { error });
     return errorResponse('Failed to get dashboard data', 500);
   }
+}
+
+function calculateTotalBalance(accounts: Array<{ currentBalance: number }>): number {
+  return accounts.reduce((sum, acc) => sum + acc.currentBalance, 0);
 }
 
 export async function handleCategories(

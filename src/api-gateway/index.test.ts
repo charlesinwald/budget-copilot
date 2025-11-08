@@ -15,26 +15,89 @@ describe('ApiGateway', () => {
         error: vi.fn(),
       },
       PLAID_INTEGRATION: {
-        createLinkToken: vi.fn(),
-        exchangeToken: vi.fn(),
-        getAccounts: vi.fn(),
-        getTransactions: vi.fn(),
+        createLinkToken: vi.fn().mockResolvedValue({
+          linkToken: 'link-sandbox-test',
+          expiration: '2025-11-09T00:00:00Z',
+          requestId: 'req_123',
+        }),
+        exchangeToken: vi.fn().mockResolvedValue({
+          accessToken: 'access-sandbox-token',
+          itemId: 'item_123',
+          accounts: [
+            {
+              accountId: 'acc_123',
+              name: 'Checking',
+              type: 'depository',
+              subtype: 'checking',
+              mask: '0000',
+              balances: { current: 1000, available: 1000, isoCurrencyCode: 'USD' },
+            },
+          ],
+        }),
+        getAccounts: vi.fn().mockResolvedValue([
+          {
+            id: 'acc_123',
+            accountId: 'acc_123',
+            name: 'Checking',
+            type: 'depository',
+            subtype: 'checking',
+            currentBalance: 1000,
+            availableBalance: 1000,
+            currencyCode: 'USD',
+            institutionName: 'Chase',
+          },
+        ]),
+        getTransactions: vi.fn().mockResolvedValue({
+          transactions: [
+            {
+              transactionId: 'txn_123',
+              accountId: 'acc_123',
+              amount: 10.5,
+              date: '2025-11-07',
+              name: 'Test Transaction',
+            },
+          ],
+          total: 1,
+          hasMore: false,
+        }),
         syncTransactions: vi.fn(),
       },
       AI_ANALYSIS: {
-        analyzeSpending: vi.fn(),
-        generatePredictions: vi.fn(),
-        chatWithFinancialData: vi.fn(),
+        analyzeSpending: vi.fn().mockResolvedValue({
+          period: 'monthly',
+          totalSpending: 500,
+          byCategory: [
+            { category: 'Food and Drink', amount: 200, percentage: 40 },
+            { category: 'Shopping', amount: 150, percentage: 30 },
+          ],
+          topMerchants: [{ merchantName: 'Starbucks', amount: 100 }],
+          insights: ['Test insight'],
+        }),
+        generatePredictions: vi.fn().mockResolvedValue({
+          predictions: [
+            {
+              type: 'recurring_bill',
+              category: 'Bills',
+              predictedAmount: 100,
+              predictedDate: '2025-12-01',
+              confidence: 0.9,
+            },
+          ],
+        }),
+        chatWithFinancialData: vi.fn().mockResolvedValue({
+          response: 'You spent $200 on dining last month.',
+          references: [],
+        }),
         categorizeTransaction: vi.fn(),
         analyzeMerchant: vi.fn(),
       },
       SESSION_CACHE: {
-        get: vi.fn(),
+        get: vi.fn().mockResolvedValue('user_123'),
         put: vi.fn(),
         delete: vi.fn(),
       },
       TRANSACTION_SYNC_QUEUE: {
-        send: vi.fn(),
+        send: vi.fn().mockResolvedValue(undefined),
       },
       FINANCIAL_DB: {
         query: vi.fn(),

@@ -28,6 +28,11 @@ describe('PlaidIntegration', () => {
 
   describe('createLinkToken', () => {
     test('should create link token for valid userId', async () => {
+      vi.spyOn(service as any, 'makePlaidRequest').mockResolvedValue({
+        link_token: 'link-sandbox-test-token',
+        expiration: '2025-11-09T00:00:00Z',
+      });
+
       const result = await service.createLinkToken('user_123');
 
       expect(result).toHaveProperty('linkToken');
@@ -46,6 +51,11 @@ describe('PlaidIntegration', () => {
     test('should use correct Plaid environment from config', async () => {
       mockEnv.PLAID_ENVIRONMENT = 'production';
 
+      vi.spyOn(service as any, 'makePlaidRequest').mockResolvedValue({
+        link_token: 'link-production-test-token',
+        expiration: '2025-11-09T00:00:00Z',
+      });
+
       const result = await service.createLinkToken('user_123');
 
       expect(result.linkToken).toBeDefined();
@@ -63,6 +73,22 @@ describe('PlaidIntegration', () => {
 
   describe('exchangeToken', () => {
     test('should exchange public token successfully', async () => {
+      vi.spyOn(service as any, 'exchangePublicToken').mockResolvedValue({
+        accessToken: 'access-sandbox-token',
+        itemId: 'item_123',
+      });
+
+      vi.spyOn(service as any, 'fetchAccounts').mockResolvedValue([
+        {
+          accountId: 'acc_123',
+          name: 'Checking',
+          type: 'depository',
+          subtype: 'checking',
+          mask: '0000',
+          balances: { current: 1000, available: 1000, isoCurrencyCode: 'USD' },
+        },
+      ]);
+
       const result = await service.exchangeToken({
         publicToken: 'public-sandbox-xyz',
         userId: 'user_123',
@@ -77,6 +103,22 @@ describe('PlaidIntegration', () => {
     });
 
     test('should store access token in database', async () => {
+      vi.spyOn(service as any, 'exchangePublicToken').mockResolvedValue({
+        accessToken: 'access-sandbox-token',
+        itemId: 'item_123',
+      });
+
+      vi.spyOn(service as any, 'fetchAccounts').mockResolvedValue([
+        {
+          accountId: 'acc_123',
+          name: 'Checking',
+          type: 'depository',
+          subtype: 'checking',
+          mask: '0000',
+          balances: { current: 1000, available: 1000, isoCurrencyCode: 'USD' },
+        },
+      ]);
+
       await service.exchangeToken({
         publicToken: 'public-sandbox-xyz',
         userId: 'user_123',
@@ -129,6 +171,17 @@ describe('PlaidIntegration', () => {
         },
       ]);
 
+      vi.spyOn(service as any, 'fetchAccounts').mockResolvedValue([
+        {
+          accountId: 'acc_123',
+          name: 'Checking',
+          type: 'depository',
+          subtype: 'checking',
+          mask: '0000',
+          balances: { current: 1000, available: 1000, isoCurrencyCode: 'USD' },
+        },
+      ]);
+
       const result = await service.getAccounts('user_123');
 
       expect(Array.isArray(result)).toBe(true);
@@ -152,6 +205,17 @@ describe('PlaidIntegration', () => {
         { item_id: 'item_2', access_token: 'token_2', institution_name: 'Bank of America' },
       ]);
 
+      vi.spyOn(service as any, 'fetchAccounts').mockResolvedValue([
+        {
+          accountId: 'acc_123',
+          name: 'Checking',
+          type: 'depository',
+          subtype: 'checking',
+          mask: '0000',
+          balances: { current: 1000, available: 1000, isoCurrencyCode: 'USD' },
+        },
+      ]);
+
       const result = await service.getAccounts('user_123');
 
       expect(result.length).toBeGreaterThan(0);
@@ -160,6 +224,17 @@ describe('PlaidIntegration', () => {
     test('should include balance information', async () => {
       vi.mocked(mockEnv.FINANCIAL_DB.query).mockResolvedValue([
         { item_id: 'item_abc', access_token: 'token', institution_name: 'Chase' },
+      ]);
+
+      vi.spyOn(service as any, 'fetchAccounts').mockResolvedValue([
+        {
+          accountId: 'acc_123',
+          name: 'Checking',
+          type: 'depository',
+          subtype: 'checking',
+          mask: '0000',
+          balances: { current: 1000, available: 1000, isoCurrencyCode: 'USD' },
+        },
       ]);
 
       const result = await service.getAccounts('user_123');
@@ -177,6 +252,14 @@ describe('PlaidIntegration', () => {
         { item_id: 'item_abc', access_token: 'token' },
       ]);
 
+      vi.spyOn(service as any, 'fetchTransactions').mockResolvedValue({
+        transactions: [
+          { transactionId: 'txn_1', amount: 10, date: '2025-11-01', name: 'Test' },
+        ],
+        total: 1,
+        hasMore: false,
+      });
+
       const result = await service.getTransactions({
         userId: 'user_123',
         startDate: '2025-10-01',
@@ -193,6 +276,14 @@ describe('PlaidIntegration', () => {
         { item_id: 'item_abc', access_token: 'token' },
       ]);
 
+      vi.spyOn(service as any, 'fetchTransactions').mockResolvedValue({
+        transactions: [
+          { transactionId: 'txn_1', amount: 10, date: '2025-11-01', accountId: 'acc_xyz' },
+        ],
+        total: 1,
+        hasMore: false,
+      });
+
       const result = await service.getTransactions({
         userId: 'user_123',
         accountId: 'acc_xyz',
@@ -205,6 +296,16 @@ describe('PlaidIntegration', () => {
       vi.mocked(mockEnv.FINANCIAL_DB.query).mockResolvedValue([
         { item_id: 'item_abc', access_token: 'token' },
       ]);
+
+      vi.spyOn(service as any, 'fetchTransactions').mockResolvedValue({
+        transactions: Array(8).fill(null).map((_, i) => ({
+          transactionId: `txn_${i}`,
+          amount: 10,
+          date: '2025-11-01',
+        })),
+        total: 8,
+        hasMore: false,
+      });
 
       const result = await service.getTransactions({
         userId: 'user_123',
