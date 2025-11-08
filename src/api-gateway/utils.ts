@@ -146,6 +146,91 @@ export async function handleExchangeToken(
   }
 }
 
+// Frontend compatibility: POST /api/plaid/balance
+export async function handlePlaidBalance(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  try {
+    const body = await parseJsonBody<{ access_token?: string; userId?: string }>(request);
+    const userId = body.userId || (await env.SESSION_CACHE.get('currentUserId')) || 'user_123';
+    const accounts = await env.PLAID_INTEGRATION.getAccounts(userId as string);
+    return jsonResponse({ accounts });
+  } catch (error) {
+    env.logger.error('Failed to get Plaid balance', { error });
+    return errorResponse('Failed to get Plaid balance', 500);
+  }
+}
+
+// Frontend compatibility: POST /api/plaid/transactions
+export async function handlePlaidTransactions(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  try {
+    const body = await parseJsonBody<{
+      access_token?: string;
+      userId?: string;
+      start_date?: string;
+      end_date?: string;
+      account_id?: string;
+    }>(request);
+    const userId = body.userId || (await env.SESSION_CACHE.get('currentUserId')) || 'user_123';
+    const result = await env.PLAID_INTEGRATION.getTransactions({
+      userId: userId as string,
+      accountId: body.account_id,
+      startDate: body.start_date,
+      endDate: body.end_date,
+      count: 100,
+      offset: 0,
+    });
+    // Map to Plaid-like shape if needed
+    const transactions = result.transactions.map(t => ({
+      transaction_id: t.transactionId,
+      id: t.transactionId,
+      account_id: t.accountId,
+      amount: t.amount,
+      date: t.date,
+      authorized_date: t.authorizedDate,
+      name: t.name,
+      merchant_name: t.merchantName,
+      category: t.category,
+      pending: t.pending,
+      transaction_type: t.transactionType,
+      payment_channel: t.paymentChannel,
+      iso_currency_code: 'USD',
+    }));
+    return jsonResponse({ transactions, total: result.total, hasMore: result.hasMore });
+  } catch (error) {
+    env.logger.error('Failed to get Plaid transactions', { error });
+    return errorResponse('Failed to get Plaid transactions', 500);
+  }
+}
+
+// Frontend compatibility: POST /api/ai/chat
+export async function handleAiChat(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  try {
+    const body = await parseJsonBody<{ message?: string }>(request);
+    const message = (body.message || '').toString();
+    if (!message.trim()) {
+      return errorResponse('message cannot be empty', 400);
+    }
+    const userId = (await env.SESSION_CACHE.get('currentUserId')) || 'user_123';
+    const result = await env.AI_ANALYSIS.chatWithFinancialData({
+      userId: userId as string,
+      message,
+    });
+    // Frontend expects a simple message/content/text string
+    return jsonResponse({ message: result.response });
+  } catch (error) {
+    env.logger.error('Failed to process AI chat', { error });
+    return errorResponse('Failed to process AI chat', 500);
+  }
+}
+
 export async function handleGetAccounts(
   request: Request,
   env: Env

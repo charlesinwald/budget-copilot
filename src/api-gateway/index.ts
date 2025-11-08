@@ -14,6 +14,7 @@ import {
   jsonResponse,
   errorResponse,
 } from './utils.js';
+import { handlePlaidBalance, handlePlaidTransactions, handleAiChat } from './utils.js';
 
 export default class ApiGateway extends Service<Env> {
   constructor(ctx: any, env: any) {
@@ -51,6 +52,14 @@ export default class ApiGateway extends Service<Env> {
         return await handleExchangeToken(request, this.env);
       }
 
+      if (pathname === '/api/plaid/balance' && method === 'POST') {
+        return await handlePlaidBalance(request, this.env);
+      }
+
+      if (pathname === '/api/plaid/transactions' && method === 'POST') {
+        return await handlePlaidTransactions(request, this.env);
+      }
+
       if (pathname === '/api/accounts' && method === 'GET') {
         return await handleGetAccounts(request, this.env);
       }
@@ -61,6 +70,10 @@ export default class ApiGateway extends Service<Env> {
 
       if (pathname === '/api/transactions/sync' && method === 'POST') {
         return await handleSyncTransactions(request, this.env);
+      }
+
+      if (pathname === '/api/ai/chat' && method === 'POST') {
+        return await handleAiChat(request, this.env);
       }
 
       if (pathname === '/api/chat' && method === 'POST') {
