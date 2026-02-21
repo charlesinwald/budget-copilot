@@ -146,6 +146,33 @@ export async function handleExchangeToken(
   }
 }
 
+// Frontend compatibility: POST /api/plaid/create_link_token
+export async function handleCreateLinkTokenCompat(
+  _request: Request,
+  _env: Env
+): Promise<Response> {
+  // Return a static mock link token for local development
+  return jsonResponse({ link_token: 'link-sandbox-mock-token' });
+}
+
+// Frontend compatibility: POST /api/plaid/exchange_public_token
+export async function handleExchangePublicTokenCompat(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  try {
+    const body = await parseJsonBody<{ public_token?: string }>(request);
+    if (!body.public_token) {
+      return errorResponse('public_token is required', 400);
+    }
+    // Return a mock access token for local development
+    return jsonResponse({ access_token: 'access-sandbox-mock-token', item_id: 'item-mock' });
+  } catch (error) {
+    env.logger.error('Failed to exchange public token (compat)', { error });
+    return errorResponse('Failed to exchange public token', 500);
+  }
+}
+
 // Frontend compatibility: POST /api/plaid/balance
 export async function handlePlaidBalance(
   request: Request,
@@ -154,6 +181,36 @@ export async function handlePlaidBalance(
   try {
     const body = await parseJsonBody<{ access_token?: string; userId?: string }>(request);
     const userId = body.userId || (await env.SESSION_CACHE.get('currentUserId')) || 'user_123';
+    // Return mock accounts when using mock access token
+    if ((body.access_token || '').startsWith('access-sandbox-mock-token')) {
+      const accounts = [
+        {
+          accountId: 'acc_mock_checking',
+          name: 'Everyday Checking',
+          officialName: 'Everyday Checking',
+          type: 'depository',
+          subtype: 'checking',
+          mask: '1234',
+          currentBalance: 2480.55,
+          availableBalance: 2200.00,
+          currencyCode: 'USD',
+          institutionName: 'Plaid Mock Bank',
+        },
+        {
+          accountId: 'acc_mock_savings',
+          name: 'High-Yield Savings',
+          officialName: 'High-Yield Savings',
+          type: 'depository',
+          subtype: 'savings',
+          mask: '5678',
+          currentBalance: 10250.13,
+          availableBalance: 10250.13,
+          currencyCode: 'USD',
+          institutionName: 'Plaid Mock Bank',
+        },
+      ];
+      return jsonResponse({ accounts });
+    }
     const accounts = await env.PLAID_INTEGRATION.getAccounts(userId as string);
     return jsonResponse({ accounts });
   } catch (error) {
@@ -176,6 +233,59 @@ export async function handlePlaidTransactions(
       account_id?: string;
     }>(request);
     const userId = body.userId || (await env.SESSION_CACHE.get('currentUserId')) || 'user_123';
+    // Return mock transactions when using mock access token
+    if ((body.access_token || '').startsWith('access-sandbox-mock-token')) {
+      const today = new Date();
+      const toISO = (d: Date) => d.toISOString().slice(0, 10);
+      const tx = [
+        {
+          transaction_id: 'tx_mock_1',
+          id: 'tx_mock_1',
+          account_id: 'acc_mock_checking',
+          amount: -23.45,
+          date: toISO(today),
+          authorized_date: toISO(today),
+          name: 'Starbucks',
+          merchant_name: 'Starbucks',
+          category: ['Food and Drink'],
+          pending: false,
+          transaction_type: 'card',
+          payment_channel: 'in store',
+          iso_currency_code: 'USD',
+        },
+        {
+          transaction_id: 'tx_mock_2',
+          id: 'tx_mock_2',
+          account_id: 'acc_mock_checking',
+          amount: -68.92,
+          date: toISO(new Date(today.getTime() - 2 * 86400000)),
+          authorized_date: toISO(new Date(today.getTime() - 2 * 86400000)),
+          name: 'Amazon',
+          merchant_name: 'Amazon',
+          category: ['Shopping'],
+          pending: false,
+          transaction_type: 'card',
+          payment_channel: 'online',
+          iso_currency_code: 'USD',
+        },
+        {
+          transaction_id: 'tx_mock_3',
+          id: 'tx_mock_3',
+          account_id: 'acc_mock_savings',
+          amount: 2500.00,
+          date: toISO(new Date(today.getTime() - 10 * 86400000)),
+          authorized_date: toISO(new Date(today.getTime() - 10 * 86400000)),
+          name: 'ACME Corp Payroll',
+          merchant_name: 'ACME Corp',
+          category: ['Income'],
+          pending: false,
+          transaction_type: 'direct deposit',
+          payment_channel: 'other',
+          iso_currency_code: 'USD',
+        },
+      ];
+      return jsonResponse({ transactions: tx, total: tx.length, hasMore: false });
+    }
     const result = await env.PLAID_INTEGRATION.getTransactions({
       userId: userId as string,
       accountId: body.account_id,
@@ -213,7 +323,111 @@ export async function handleAiChat(
   env: Env
 ): Promise<Response> {
   try {
-    // For local development, return a mock chat response to unblock UI
+    const body = await parseJsonBody<{ message?: string; context?: any }>(request);
+    const message = (body.message || '').toString();
+    if (!message.trim()) {
+      return errorResponse('message cannot be empty', 400);
+    }
+    if (env.ANTHROPIC_API_KEY) {
+      // If context is provided by the frontend, use it directly to build a prompt.
+      // This avoids DB dependency in mock mode while still using real Claude.
+      if (body.context) {
+        const { accounts = [], transactions = [], summary, topCategories = [] } = body.context || {};
+        const accountsText = Array.isArray(accounts)
+          ? accounts.map((a: any) => `- ${a.name}: $${(a.balance ?? 0).toFixed?.(2) ?? a.balance}`).join('\n')
+          : '';
+        const topCatsText = Array.isArray(topCategories)
+          ? topCategories.map((c: any) => `- ${c.category}: $${(c.amount ?? 0).toFixed?.(2) ?? c.amount}`).join('\n')
+          : '';
+        const txText = Array.isArray(transactions)
+          ? transactions.slice(-20).map((t: any) =>
+              `- ${t.date} ${t.name}${t.merchant_name ? ' (' + t.merchant_name + ')' : ''}: $${(t.amount ?? 0)}`
+            ).join('\n')
+          : '';
+        const summaryText = summary
+          ? `Total spending: $${summary.totalSpending?.toFixed?.(2) ?? summary.totalSpending}
+Average daily: $${summary.averageDailySpending?.toFixed?.(2) ?? summary.averageDailySpending}
+Largest transaction: $${summary.largestTransaction}
+Transactions: ${summary.numTransactions}`
+          : '';
+
+        const prompt = `You are a helpful financial assistant. Use the provided context to answer the user's question.
+
+Accounts:
+${accountsText || 'N/A'}
+
+Summary:
+${summaryText || 'N/A'}
+
+Top categories:
+${topCatsText || 'N/A'}
+
+Recent transactions:
+${txText || 'N/A'}
+
+User: ${message}
+
+Respond clearly and concisely.`;
+
+        const primaryModel = ((env as any).ANTHROPIC_MODEL as string) || 'claude-3-5-sonnet-latest';
+        let resp = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': env.ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model: primaryModel,
+            max_tokens: 512,
+            messages: [{ role: 'user', content: prompt }],
+          }),
+        });
+        if (!resp.ok) {
+          let errText = '';
+          try { errText = await resp.text(); } catch {}
+          env.logger.error('Anthropic API error', { status: resp.status, err: errText });
+          // If model not found, retry with a widely available model
+          if (resp.status === 404 || (errText.includes('not_found_error') && errText.includes('model'))) {
+            const fallbackModel = 'claude-3-5-haiku-latest';
+            const resp2 = await fetch('https://api.anthropic.com/v1/messages', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': env.ANTHROPIC_API_KEY,
+                'anthropic-version': '2023-06-01',
+              },
+              body: JSON.stringify({
+                model: fallbackModel,
+                max_tokens: 512,
+                messages: [{ role: 'user', content: prompt }],
+              }),
+            });
+            if (!resp2.ok) {
+              let err2 = '';
+              try { err2 = await resp2.text(); } catch {}
+              env.logger.error('Anthropic API error (fallback)', { status: resp2.status, err: err2 });
+              return jsonResponse({ message: 'Sorry, I could not get a response from the AI right now.' }, 200);
+            }
+            const result2 = await resp2.json() as { content?: Array<{ text?: string }> };
+            const text2 = (result2.content && result2.content[0]?.text) || '';
+            return jsonResponse({ message: text2 });
+          }
+          return jsonResponse({ message: 'Sorry, I could not get a response from the AI right now.' }, 200);
+        }
+        const result = await resp.json() as { content?: Array<{ text?: string }> };
+        const text = (result.content && result.content[0]?.text) || '';
+        return jsonResponse({ message: text });
+      }
+      // Otherwise, use the service to fetch DB-backed context and chat
+      const userId = (await env.SESSION_CACHE.get('currentUserId')) || 'user_123';
+      const result = await env.AI_ANALYSIS.chatWithFinancialData({
+        userId: userId as string,
+        message,
+      });
+      return jsonResponse({ message: result.response, references: result.references });
+    }
+    // Fallback to mock if no API key
     return jsonResponse({ message: 'Mock response: Thanks for your message! Your finances look steady this month.' });
   } catch (error) {
     env.logger.error('Failed to process AI chat', { error });
@@ -477,4 +691,69 @@ function isValidDate(dateString: string): boolean {
   }
   const date = new Date(dateString);
   return !isNaN(date.getTime());
+}
+
+/**
+ * Mock Mode: Process transactions with real Anthropic AI
+ * This endpoint enables testing AI features with mock Plaid data
+ */
+export async function handleMockProcessTransactions(request: Request, env: Env): Promise<Response> {
+  try {
+    const body = (await request.json()) as { userId?: string };
+    const { userId } = body;
+
+    if (!userId) {
+      return errorResponse('userId is required', 400);
+    }
+
+    env.logger.info('Processing mock transactions with AI', { userId });
+
+    // Get all uncategorized transactions
+    const transactions = await env.FINANCIAL_DB.query(
+      'SELECT transaction_id, name, merchant_name, amount FROM transactions WHERE user_id = ? AND ai_category IS NULL',
+      [userId]
+    );
+
+    env.logger.info(`Found ${transactions.length} transactions to categorize with AI`);
+
+    // Process each transaction with REAL Anthropic AI
+    const results = [];
+    for (const transaction of transactions) {
+      try {
+        // Call the real AI service
+        const categorization = await env.AI_ANALYSIS.categorizeTransaction({
+          transactionName: transaction.name,
+          merchantName: transaction.merchant_name,
+          amount: transaction.amount,
+        });
+
+        // Update transaction with AI categorization
+        await env.FINANCIAL_DB.execute(
+          'UPDATE transactions SET ai_category = ?, ai_confidence = ?, updated_at = ? WHERE transaction_id = ?',
+          [categorization.category, categorization.confidence, new Date().toISOString(), transaction.transaction_id]
+        );
+
+        results.push({
+          transaction_id: transaction.transaction_id,
+          name: transaction.name,
+          category: categorization.category,
+          confidence: categorization.confidence,
+        });
+
+        env.logger.info(`✅ AI Categorized: "${transaction.name}" → ${categorization.category} (${categorization.confidence})`);
+      } catch (error) {
+        env.logger.error('Failed to categorize transaction with AI', { transaction, error });
+      }
+    }
+
+    return jsonResponse({
+      success: true,
+      message: `Processed ${results.length} transactions with Anthropic AI`,
+      processed: results.length,
+      results,
+    });
+  } catch (error) {
+    env.logger.error('Failed to process mock transactions', { error });
+    return errorResponse('Failed to process transactions', 500);
+  }
 }

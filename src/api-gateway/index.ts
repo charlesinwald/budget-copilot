@@ -11,10 +11,17 @@ import {
   handlePredictions,
   handleDashboard,
   handleCategories,
+  handleMockProcessTransactions,
   jsonResponse,
   errorResponse,
 } from './utils.js';
-import { handlePlaidBalance, handlePlaidTransactions, handleAiChat } from './utils.js';
+import {
+  handlePlaidBalance,
+  handlePlaidTransactions,
+  handleAiChat,
+  handleCreateLinkTokenCompat,
+  handleExchangePublicTokenCompat,
+} from './utils.js';
 
 export default class ApiGateway extends Service<Env> {
   constructor(ctx: any, env: any) {
@@ -50,6 +57,14 @@ export default class ApiGateway extends Service<Env> {
 
       if (pathname === '/api/plaid/exchange-token' && method === 'POST') {
         return await handleExchangeToken(request, this.env);
+      }
+
+      // Frontend compat underscore endpoints
+      if (pathname === '/api/plaid/create_link_token' && method === 'POST') {
+        return await handleCreateLinkTokenCompat(request, this.env);
+      }
+      if (pathname === '/api/plaid/exchange_public_token' && method === 'POST') {
+        return await handleExchangePublicTokenCompat(request, this.env);
       }
 
       if (pathname === '/api/plaid/balance' && method === 'POST') {
@@ -98,6 +113,11 @@ export default class ApiGateway extends Service<Env> {
 
       if (pathname === '/api/categories' && method === 'POST') {
         return errorResponse('Method not allowed', 405);
+      }
+
+      // Mock mode: Process transactions with AI
+      if (pathname === '/api/mock/process-transactions' && method === 'POST') {
+        return await handleMockProcessTransactions(request, this.env);
       }
 
       return errorResponse('Not found', 404);

@@ -236,7 +236,8 @@ export default class AiAnalysis extends Service<Env> {
   }
 
   private async callClaudeAPI(prompt: string): Promise<string> {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const primaryModel = ((this.env as any).ANTHROPIC_MODEL as string) || 'claude-3-5-sonnet-latest';
+    let response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -244,7 +245,7 @@ export default class AiAnalysis extends Service<Env> {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-3-sonnet-20240229',
+        model: primaryModel,
         max_tokens: 1024,
         messages: [
           {
@@ -256,8 +257,36 @@ export default class AiAnalysis extends Service<Env> {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(`Claude API error: ${JSON.stringify(error)}`);
+      let errText = '';
+      try { errText = await response.text(); } catch {}
+      // If model not found, try fallback model
+      if (response.status === 404 || (errText.includes('not_found_error') && errText.includes('model'))) {
+        const fallbackModel = 'claude-3-5-haiku-latest';
+        response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': this.env.ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model: fallbackModel,
+            max_tokens: 1024,
+            messages: [
+              {
+                role: 'user',
+                content: prompt,
+              },
+            ],
+          }),
+        });
+        if (!response.ok) {
+          const error2 = await response.text().catch(() => '');
+          throw new Error(`Claude API error (fallback): ${error2}`);
+        }
+      } else {
+        throw new Error(`Claude API error: ${errText}`);
+      }
     }
 
     const result = await response.json() as { content?: Array<{ text?: string }> };

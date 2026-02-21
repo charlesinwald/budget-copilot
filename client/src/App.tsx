@@ -51,7 +51,7 @@ export default function App() {
               }}
               title={isConnected ? 'Disconnect' : 'Toggle Mock Data'}
             >
-              {isConnected ? 'Disconnect' : (useMock ? 'Mock: On' : 'Mock: Off')}
+              {/* {isConnected ? 'Disconnect' : (useMock ? 'Mock: On' : 'Mock: Off')} */}
             </button>
           </div>
         </div>

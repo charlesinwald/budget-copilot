@@ -275,6 +275,16 @@ export default class PlaidIntegration extends Service<Env> {
   }
 
   private async exchangePublicToken(publicToken: string): Promise<{ accessToken: string; itemId: string }> {
+    // Mock mode: Return mock tokens
+    if (publicToken.startsWith('public-sandbox-mock') || publicToken === 'public-sandbox-mock') {
+      this.env.logger.info('[MOCK] Exchanging mock public token');
+      return {
+        accessToken: 'access-sandbox-mock-token',
+        itemId: `mock_item_${Date.now()}`,
+      };
+    }
+
+    // Real Plaid API call
     const config = this.getConfig();
     const result = await this.makePlaidRequest<{ access_token: string; item_id: string }>(
       '/item/public_token/exchange',
@@ -292,6 +302,38 @@ export default class PlaidIntegration extends Service<Env> {
   }
 
   private async fetchAccounts(accessToken: string): Promise<PlaidAccount[]> {
+    // Mock mode: Return mock accounts
+    if (accessToken.startsWith('access-mock') || accessToken.startsWith('access-sandbox-mock')) {
+      this.env.logger.info('[MOCK] Returning mock accounts');
+      return [
+        {
+          accountId: 'mock_acc_checking',
+          name: 'Mock Checking Account',
+          type: 'depository',
+          subtype: 'checking',
+          mask: '0000',
+          balances: {
+            current: 1500.00,
+            available: 1500.00,
+            isoCurrencyCode: 'USD',
+          },
+        },
+        {
+          accountId: 'mock_acc_savings',
+          name: 'Mock Savings Account',
+          type: 'depository',
+          subtype: 'savings',
+          mask: '1111',
+          balances: {
+            current: 5000.00,
+            available: 5000.00,
+            isoCurrencyCode: 'USD',
+          },
+        },
+      ];
+    }
+
+    // Real Plaid API call
     const config = this.getConfig();
     const result = await this.makePlaidRequest<{ accounts: PlaidAccount[] }>(
       '/accounts/get',
@@ -333,6 +375,36 @@ export default class PlaidIntegration extends Service<Env> {
     endDate: string,
     accountIds?: string[]
   ): Promise<GetTransactionsResponse> {
+    // Mock mode: Return mock transactions from database
+    if (accessToken.startsWith('access-mock') || accessToken.startsWith('access-sandbox-mock')) {
+      this.env.logger.info('[MOCK] Returning mock transactions from database');
+
+      // Get mock transactions from the in-memory database
+      const allTransactions = await this.env.FINANCIAL_DB.query(
+        'SELECT * FROM transactions WHERE date >= ? AND date <= ?',
+        [startDate, endDate]
+      );
+
+      const mockTransactions = allTransactions.map((t: any) => ({
+        transactionId: t.transaction_id,
+        accountId: t.account_id,
+        amount: t.amount,
+        date: t.date,
+        name: t.name,
+        merchantName: t.merchant_name,
+        pending: t.pending === 1 || t.pending === true,
+        category: t.category ? [t.category] : undefined,
+        paymentChannel: t.payment_channel,
+      }));
+
+      return {
+        transactions: mockTransactions,
+        total: mockTransactions.length,
+        hasMore: false,
+      };
+    }
+
+    // Real Plaid API call
     const config = this.getConfig();
     const body: Record<string, unknown> = {
       client_id: config.clientId,

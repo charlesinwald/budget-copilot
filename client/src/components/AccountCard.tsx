@@ -5,6 +5,7 @@ interface AccountCardProps {
   account: Account;
 }
 
+
 export default function AccountCard({ account }: AccountCardProps) {
   const balance = account.currentBalance ?? account.balances?.current ?? 0;
   const currency = account.currencyCode ?? account.balances?.isoCurrencyCode ?? 'USD';

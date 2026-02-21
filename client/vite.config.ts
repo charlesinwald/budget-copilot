@@ -11,7 +11,9 @@ export default defineConfig({
         changeOrigin: true
       }
     }
-  }
+  },
+  // make VITE_PLAID_MOCK false by default
+  envPrefix: ['VITE_', 'PLAID_MOCK=false']
 });
 
 
