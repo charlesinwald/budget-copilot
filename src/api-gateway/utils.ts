@@ -772,3 +772,188 @@ export async function handleMockProcessTransactions(request: Request, env: Env):
     return errorResponse('Failed to process transactions', 500);
   }
 }
+
+/**
+ * Copilotkit Runtime Handler
+ * Adapts Copilotkit's protocol to work with our existing AI chat endpoint
+ */
+export async function handleCopilotkitRuntime(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  try {
+    const url = new URL(request.url);
+    const method = request.method;
+    const pathname = url.pathname;
+
+    // Handle OPTIONS for CORS
+    if (method === 'OPTIONS') {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        },
+      });
+    }
+
+    // Handle GET requests - CopilotKit queries /info to discover agents
+    if (method === 'GET') {
+      // Return agent information for /info endpoint or base endpoint
+      if (pathname === '/api/copilotkit/info' || pathname.endsWith('/info') || pathname === '/api/copilotkit') {
+        return jsonResponse({
+          agents: [
+            {
+              name: 'default',
+              description: 'Financial assistant for budget and transaction analysis',
+              instructions: 'You are a helpful financial assistant that can analyze accounts, transactions, and provide budgeting insights.',
+            }
+          ]
+        });
+      }
+    }
+
+    // Handle streaming chat requests
+    if (method === 'POST') {
+      let body: any = {};
+      try {
+        body = await parseJsonBody<any>(request);
+      } catch (error) {
+        // Handle empty or invalid JSON bodies gracefully (CopilotKit initialization requests)
+        env.logger?.warn('CopilotKit runtime: empty or invalid request body', { error });
+        return jsonResponse({
+          messages: []
+        });
+      }
+      
+      // Extract messages from Copilotkit format
+      const messages = body.messages || [];
+      const lastMessage = messages[messages.length - 1];
+      
+      // Handle empty messages gracefully (CopilotKit may send initialization requests)
+      if (!lastMessage || !lastMessage.content) {
+        // Return empty response instead of error for initialization/health check requests
+        return jsonResponse({
+          messages: []
+        });
+      }
+
+      const messageText = typeof lastMessage.content === 'string' 
+        ? lastMessage.content 
+        : lastMessage.content.text || '';
+
+      // Extract context from Copilotkit's context
+      const context = body.context || {};
+      const accounts = context.accounts || [];
+      const transactions = context.transactions || [];
+      const personality = context.personality || 'friendly';
+
+      // Build the chat context similar to handleAiChat
+      const chatPayload = {
+        message: messageText,
+        personality,
+        context: {
+          accounts: accounts.map((a: any) => ({
+            name: a.name || a.accountName || '',
+            balance: a.balance || a.currentBalance || 0,
+            type: a.type || a.accountType || ''
+          })),
+          transactions: Array.isArray(transactions) ? transactions.slice(-100) : [],
+          summary: context.summary || {},
+          topCategories: context.topCategories || []
+        }
+      };
+
+      // Call the existing AI chat handler logic
+      if (env.ANTHROPIC_API_KEY && chatPayload.context) {
+        const { accounts: accs = [], transactions: txs = [], summary, topCategories = [] } = chatPayload.context;
+        const accountsText = Array.isArray(accs)
+          ? accs.map((a: any) => `- ${a.name}: $${(a.balance ?? 0).toFixed?.(2) ?? a.balance}`).join('\n')
+          : '';
+        const topCatsText = Array.isArray(topCategories)
+          ? topCategories.map((c: any) => `- ${c.category}: $${(c.amount ?? 0).toFixed?.(2) ?? c.amount}`).join('\n')
+          : '';
+        const txText = Array.isArray(txs)
+          ? txs.slice(-20).map((t: any) =>
+              `- ${t.date} ${t.name}${t.merchant_name ? ' (' + t.merchant_name + ')' : ''}: $${(t.amount ?? 0)}`
+            ).join('\n')
+          : '';
+        const summaryText = summary
+          ? `Total spending: $${summary.totalSpending?.toFixed?.(2) ?? summary.totalSpending}
+Average daily: $${summary.averageDailySpending?.toFixed?.(2) ?? summary.averageDailySpending}
+Largest transaction: $${summary.largestTransaction}
+Transactions: ${summary.numTransactions}`
+          : '';
+
+        const personalityInstructions = getPersonalityInstructions(personality);
+        const prompt = `${personalityInstructions} Use the provided context to answer the user's question.
+
+Accounts:
+${accountsText || 'N/A'}
+
+Summary:
+${summaryText || 'N/A'}
+
+Top categories:
+${topCatsText || 'N/A'}
+
+Recent transactions:
+${txText || 'N/A'}
+
+User: ${messageText}
+
+Respond clearly and concisely.`;
+
+        const primaryModel = ((env as any).ANTHROPIC_MODEL as string) || 'claude-3-5-sonnet-latest';
+        const resp = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': env.ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model: primaryModel,
+            max_tokens: 512,
+            messages: [{ role: 'user', content: prompt }],
+          }),
+        });
+
+        if (!resp.ok) {
+          env.logger.error('Anthropic API error in Copilotkit runtime', { status: resp.status });
+          return jsonResponse({ 
+            messages: [{ 
+              role: 'assistant', 
+              content: 'Sorry, I could not get a response from the AI right now.' 
+            }] 
+          });
+        }
+
+        const result = await resp.json() as { content?: Array<{ text?: string }> };
+        const text = (result.content && result.content[0]?.text) || '';
+
+        // Return in Copilotkit format
+        return jsonResponse({
+          messages: [{
+            role: 'assistant',
+            content: text
+          }]
+        });
+      }
+
+      // Fallback
+      return jsonResponse({
+        messages: [{
+          role: 'assistant',
+          content: 'Mock response: Thanks for your message! Your finances look steady this month.'
+        }]
+      });
+    }
+
+    return errorResponse('Method not allowed', 405);
+  } catch (error) {
+    env.logger.error('Failed to process Copilotkit runtime request', { error });
+    return errorResponse('Failed to process request', 500);
+  }
+}

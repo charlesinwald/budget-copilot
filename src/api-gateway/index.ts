@@ -12,6 +12,7 @@ import {
   handleDashboard,
   handleCategories,
   handleMockProcessTransactions,
+  handleCopilotkitRuntime,
   jsonResponse,
   errorResponse,
 } from './utils.js';
@@ -89,6 +90,12 @@ export default class ApiGateway extends Service<Env> {
 
       if (pathname === '/api/ai/chat' && method === 'POST') {
         return await handleAiChat(request, this.env);
+      }
+
+      if (pathname === '/api/copilotkit' || pathname === '/api/copilotkit/info') {
+        if (method === 'GET' || method === 'POST' || method === 'OPTIONS') {
+          return await handleCopilotkitRuntime(request, this.env);
+        }
       }
 
       if (pathname === '/api/chat' && method === 'POST') {

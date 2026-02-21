@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useCopilotReadable } from '@copilotkit/react-core';
 import PlaidConnect from './components/PlaidConnect';
 import Dashboard from './components/Dashboard';
 import ChatSidebar from './components/ChatSidebar';
 import { useAccounts } from './hooks/useAccounts';
 import { useTransactions } from './hooks/useTransactions';
-import { Transaction } from './types';
+import { Transaction, Account } from './types';
 import { getApiBaseUrl } from './utils/api';
+import { getSummaryStats, getTopCategories } from './utils/transactionHelpers';
 
 
 
@@ -28,6 +30,42 @@ export default function App() {
     () => transactions.slice(-10).reverse(),
     [transactions]
   );
+
+  // Make financial data available to Copilotkit
+  const summaryStats = useMemo(() => getSummaryStats(transactions), [transactions]);
+  const topCategories = useMemo(() => getTopCategories(transactions), [transactions]);
+
+  useCopilotReadable({
+    description: 'User financial accounts and balances',
+    value: accounts.map((acc: Account) => ({
+      name: acc.name,
+      balance: acc.balances?.current ?? acc.currentBalance ?? 0,
+      type: acc.type,
+      institutionName: acc.institutionName
+    }))
+  });
+
+  useCopilotReadable({
+    description: 'Recent financial transactions',
+    value: transactions.slice(-100).map((tx: Transaction) => ({
+      date: tx.date,
+      name: tx.name,
+      merchantName: tx.merchant_name,
+      amount: tx.amount,
+      category: tx.category?.[0] || 'Uncategorized'
+    }))
+  });
+
+  useCopilotReadable({
+    description: 'Financial summary statistics',
+    value: {
+      totalSpending: summaryStats.totalSpending,
+      averageDailySpending: summaryStats.averageDailySpending,
+      largestTransaction: summaryStats.largestTransaction,
+      numTransactions: summaryStats.numTransactions,
+      topCategories: topCategories
+    }
+  });
 
   return (
     <div className="min-h-screen">
