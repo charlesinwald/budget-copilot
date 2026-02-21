@@ -10,6 +10,7 @@ export const api = axios.create({
   timeout: 30000
 });
 
+
 export function getApiBaseUrl(): string {
   return API_BASE_URL;
 }

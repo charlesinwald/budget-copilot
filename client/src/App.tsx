@@ -7,6 +7,8 @@ import { useTransactions } from './hooks/useTransactions';
 import { Transaction } from './types';
 import { getApiBaseUrl } from './utils/api';
 
+
+
 export default function App() {
   const [accessToken, setAccessToken] = useState<string | null>(() => localStorage.getItem('access_token'));
   const [useMock, setUseMock] = useState<boolean>(false);

@@ -212,7 +212,7 @@ export default class AiAnalysis extends Service<Env> {
 
     const financialContext = await this.getFinancialContext(request.userId);
 
-    const prompt = this.buildChatPrompt(request.message, chatHistory.reverse(), financialContext);
+    const prompt = this.buildChatPrompt(request.message, chatHistory.reverse(), financialContext, request.personality);
     const response = this.env.ANTHROPIC_API_KEY
       ? await this.callClaudeAPI(prompt)
       : 'Here is a mock response based on your recent activity.';
@@ -446,10 +446,19 @@ Respond with only the category name.`;
     return nextMonth.toISOString().split('T')[0];
   }
 
-  private buildChatPrompt(message: string, chatHistory: any[], financialContext: string): string {
+  private buildChatPrompt(message: string, chatHistory: any[], financialContext: string, personality: string = 'friendly'): string {
     const historyText = chatHistory.map((h: any) => `${h.role}: ${h.content}`).join('\n');
 
-    return `You are a helpful financial assistant. Answer the user's question based on their financial data.
+    const personalityMap: Record<string, string> = {
+      friendly: 'You are a friendly and warm financial assistant. Be approachable, use encouraging language, and show empathy.',
+      grumpy: 'You are a grumpy financial assistant. Be direct, slightly sarcastic, and don\'t sugarcoat things. Use a bit of tough love but still be helpful.',
+      professional: 'You are a professional financial advisor. Be formal, precise, and use financial terminology appropriately. Maintain a business-like tone.',
+      casual: 'You are a casual financial assistant. Be relaxed, use everyday language, and keep things simple and easy to understand.',
+      enthusiastic: 'You are an enthusiastic financial assistant. Be energetic, positive, and use exclamation marks sparingly. Show excitement about helping with finances!'
+    };
+    const personalityInstructions = personalityMap[personality] || personalityMap.friendly;
+
+    return `${personalityInstructions} Answer the user's question based on their financial data.
 
 ${financialContext}
 

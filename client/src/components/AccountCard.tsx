@@ -5,6 +5,8 @@ interface AccountCardProps {
   account: Account;
 }
 
+test
+
 
 export default function AccountCard({ account }: AccountCardProps) {
   const balance = account.currentBalance ?? account.balances?.current ?? 0;

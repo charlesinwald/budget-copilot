@@ -2,6 +2,7 @@ import { useMutation } from '@tanstack/react-query';
 import { api } from '../utils/api';
 import { Account, Transaction } from '../types';
 import { buildChatContext } from '../utils/transactionHelpers';
+import { Personality } from '../components/PersonalitySelector';
 
 interface ChatResponse {
   message?: string;
@@ -11,8 +12,8 @@ interface ChatResponse {
 
 export function useChat() {
   return useMutation({
-    mutationFn: async (params: { message: string; transactions: Transaction[]; accounts: Account[] }) => {
-      const payload = buildChatContext(params.message, params.transactions, params.accounts);
+    mutationFn: async (params: { message: string; transactions: Transaction[]; accounts: Account[]; personality: Personality }) => {
+      const payload = buildChatContext(params.message, params.transactions, params.accounts, params.personality);
       const { data } = await api.post('/api/ai/chat', payload);
       const content = (data?.message ?? data?.content ?? data?.text ?? '').toString();
       return content;

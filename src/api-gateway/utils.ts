@@ -317,14 +317,27 @@ export async function handlePlaidTransactions(
   }
 }
 
+// Helper function to get personality instructions
+function getPersonalityInstructions(personality: string = 'friendly'): string {
+  const personalityMap: Record<string, string> = {
+    friendly: 'You are a friendly and warm financial assistant. Be approachable, use encouraging language, and show empathy.',
+    grumpy: 'You are a grumpy financial assistant. Be direct, slightly sarcastic, and don\'t sugarcoat things. Use a bit of tough love but still be helpful.',
+    professional: 'You are a professional financial advisor. Be formal, precise, and use financial terminology appropriately. Maintain a business-like tone.',
+    casual: 'You are a casual financial assistant. Be relaxed, use everyday language, and keep things simple and easy to understand.',
+    enthusiastic: 'You are an enthusiastic financial assistant. Be energetic, positive, and use exclamation marks sparingly. Show excitement about helping with finances!'
+  };
+  return personalityMap[personality] || personalityMap.friendly;
+}
+
 // Frontend compatibility: POST /api/ai/chat
 export async function handleAiChat(
   request: Request,
   env: Env
 ): Promise<Response> {
   try {
-    const body = await parseJsonBody<{ message?: string; context?: any }>(request);
+    const body = await parseJsonBody<{ message?: string; context?: any; personality?: string }>(request);
     const message = (body.message || '').toString();
+    const personality = (body.personality || 'friendly').toString();
     if (!message.trim()) {
       return errorResponse('message cannot be empty', 400);
     }
@@ -351,7 +364,8 @@ Largest transaction: $${summary.largestTransaction}
 Transactions: ${summary.numTransactions}`
           : '';
 
-        const prompt = `You are a helpful financial assistant. Use the provided context to answer the user's question.
+        const personalityInstructions = getPersonalityInstructions(personality);
+        const prompt = `${personalityInstructions} Use the provided context to answer the user's question.
 
 Accounts:
 ${accountsText || 'N/A'}
@@ -424,6 +438,7 @@ Respond clearly and concisely.`;
       const result = await env.AI_ANALYSIS.chatWithFinancialData({
         userId: userId as string,
         message,
+        personality,
       });
       return jsonResponse({ message: result.response, references: result.references });
     }

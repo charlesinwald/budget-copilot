@@ -79,6 +79,7 @@ export interface PredictionsResponse {
 export interface ChatRequest {
   userId: string;
   message: string;
+  personality?: string;
 }
 
 export interface TransactionReference {

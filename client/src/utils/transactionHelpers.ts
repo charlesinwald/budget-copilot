@@ -143,9 +143,10 @@ export function generateMockTransactions(days: number = 30): Transaction[] {
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
 
-export function buildChatContext(message: string, transactions: Transaction[], accounts: Account[]) {
+export function buildChatContext(message: string, transactions: Transaction[], accounts: Account[], personality: string = 'friendly') {
   return {
     message,
+    personality,
     context: {
       accounts: accounts.map(acc => ({
         name: acc.name,
